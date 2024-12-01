@@ -8,13 +8,16 @@ use JewelryPlugin\Views\PackagingView;
 class PackagingController {
 
     public static function init() {
-        add_action('init', [__CLASS__, 'register_post_type']);
-        add_action('add_meta_boxes', [__CLASS__, 'register_meta_boxes']);
+        add_action('init', [PackagingModel::class, 'register_post_type']);
+        add_filter('manage_edit-packaging_columns', [PackagingModel::class, 'add_packaging_columns']);
+        add_action('manage_packaging_posts_custom_column', [__CLASS__, 'render_packaging_columns'], 10, 2);
         add_action('save_post_packaging', [__CLASS__, 'save_meta_data']);
+        add_action('add_meta_boxes', [__CLASS__, 'register_meta_boxes']);
     }
 
-    public static function register_post_type() {
-        PackagingModel::register_post_type();
+    public static function render_packaging_columns($column, $post_id) {
+        $meta_data = PackagingModel::get_meta_data($post_id);
+        PackagingView::render_packaging_columns($column, $meta_data);
     }
 
     public static function register_meta_boxes() {

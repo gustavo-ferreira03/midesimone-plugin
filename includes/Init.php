@@ -9,10 +9,12 @@ class Init {
     }
 
     private static function load_dependencies() {
-        require_once __DIR__ . '/PostTypes/PackagingPostType.php';
+        require_once __DIR__ . '/Controllers/PackagingController.php';
+        require_once __DIR__ . '/Models/PackagingModel.php';
+        require_once __DIR__ . '/Views/PackagingView.php';
     }
 
     private static function register_hooks() {
-        PostTypes\PackagingPostType::register();
+        Controllers\PackagingController::init();
     }
 }

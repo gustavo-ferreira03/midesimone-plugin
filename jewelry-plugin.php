@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Plugin Loja de Semijoias
  * Plugin URI: https://example.com
- * Description: Plugin com uma estrutura de backend mais organizada.
+ * Description: Plugin para <LOJA>
  * Version: 1.0.0
  * Author: Gustavo Ferreira
  * License: GPLv2 or later

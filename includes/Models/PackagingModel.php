@@ -3,7 +3,6 @@
 namespace JewelryPlugin\Models;
 
 class PackagingModel {
-
     public static function register_post_type() {
         $labels = [
             'name'               => 'Embalagens',
@@ -24,7 +23,7 @@ class PackagingModel {
             'labels'        => $labels,
             'public'        => true,
             'has_archive'   => true,
-            'supports'      => [ 'title', 'editor' ],
+            'supports'      => [ '' ],
             'menu_icon'     => 'dashicons-box',
             'rewrite'       => [ 'slug' => 'packaging' ],
         ];
@@ -37,6 +36,9 @@ class PackagingModel {
             'packaging_name'        => '_packaging_name',
             'packaging_description' => '_packaging_description',
             'packaging_stock_qt'    => '_packaging_stock_qt',
+            'packaging_width'       => '_packaging_width',
+            'packaging_height'      => '_packaging_height',
+            'packaging_length'      => '_packaging_length',
         ];
 
         foreach ($fields as $field => $meta_key) {
@@ -52,5 +54,16 @@ class PackagingModel {
             'packaging_description' => get_post_meta($post_id, '_packaging_description', true),
             'packaging_stock_qt'    => get_post_meta($post_id, '_packaging_stock_qt', true),
         ];
+    }
+
+    public static function add_packaging_columns($columns) {
+        unset($columns['date']);
+        unset($columns['title']);
+
+        $columns['packaging_name'] = 'Nome';
+        $columns['packaging_description'] = 'Descrição';
+        $columns['packaging_stock_qt'] = 'Quantidade em Estoque';
+
+        return $columns;
     }
 }
