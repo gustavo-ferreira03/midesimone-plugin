@@ -66,4 +66,43 @@ class PackagingModel {
 
         return $columns;
     }
+
+    public static function get_all_packaging() {
+        $args = [
+            'post_type' => 'packaging',
+            'posts_per_page' => -1,
+            'post_status' => 'publish',
+        ];
+        $query = new \WP_Query($args);
+        return $query->posts;
+    }
+    
+    public static function reduce_stock($packaging_id, $quantity) {
+        $current_stock = (int) get_post_meta($packaging_id, '_packaging_stock_qt', true);
+    
+        if ($current_stock >= $quantity) {
+            update_post_meta($packaging_id, '_packaging_stock_qt', $current_stock - $quantity);
+        } else {
+            error_log("Estoque insuficiente para a embalagem ID: $packaging_id");
+        }
+    }
+    
+    public static function save_product_packaging_meta($post_id) {
+        if (isset($_POST['_packaging_id'])) {
+            update_post_meta($post_id, '_packaging_id', sanitize_text_field($_POST['_packaging_id']));
+        }
+    }
+    
+    public static function reduce_packaging_stock($order_id) {
+        $order = wc_get_order($order_id);
+    
+        foreach ($order->get_items() as $item) {
+            $product_id = $item->get_product_id();
+            $packaging_id = get_post_meta($product_id, '_packaging', true);
+    
+            if ($packaging_id) {
+                PackagingModel::reduce_stock($packaging_id, $item->get_quantity());
+            }
+        }
+    }   
 }
