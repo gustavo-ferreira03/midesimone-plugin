@@ -15,7 +15,10 @@ class PackagingController {
     
         add_action('woocommerce_product_options_general_product_data', [__CLASS__, 'add_packaging_dropdown']);
         add_action('woocommerce_process_product_meta', [PackagingModel::class, 'save_product_packaging_meta']);
-        add_action('woocommerce_checkout_order_processed', [PackagingModel::class, 'reduce_packaging_stock']);
+        
+        add_action('woocommerce_product_is_in_stock', [PackagingModel::class, 'validate_packaging_in_stock'], 10, 2);
+        add_action('woocommerce_check_cart_items', [PackagingModel::class, 'validate_cart_item_stock']);
+        add_action('woocommerce_reduce_order_stock', [PackagingModel::class, 'order_reduce_packaging_stock']);
     }
 
     public static function render_packaging_columns($column, $post_id) {
@@ -52,21 +55,8 @@ class PackagingController {
     }
     
     public static function add_packaging_dropdown() {
-        $packagings = PackagingModel::get_all_packaging();
+        $packagings = PackagingModel::get_all_packagings();
     
-        ?>
-        <div class="options_group">
-        <?php
-            woocommerce_wp_select([
-                'id' => '_packaging_id',
-                'label' => 'Embalagem',
-                'options' => array_reduce($packagings, function ($options, $packaging) {
-                    $options[$packaging->ID] = get_post_meta($packaging->ID, '_packaging_name', true);
-                    return $options;
-                }, ['' => 'Selecione uma embalagem']),
-            ]);
-        ?>
-        </div>
-        <?php
+        PackagingView::render_packaging_dropdown($packagings);
     }
 }

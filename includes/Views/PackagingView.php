@@ -9,14 +9,14 @@ class PackagingView {
         $stock_qt    = get_post_meta( $post->ID, '_packaging_stock_qt', true );
 
         ?>
-        <label for="packaging_name">Nome:</label>
-        <input type="text" id="packaging_name" name="packaging_name" value="<?php echo esc_attr( $name ); ?>" style="width: 100%;"><br><br>
+        <label for="packaging_name">Nome:*</label>
+        <input type="text" required id="packaging_name" name="packaging_name" value="<?php echo esc_attr( $name ); ?>" style="width: 100%;"><br><br>
 
         <label for="packaging_description">Descrição:</label>
         <textarea id="packaging_description" name="packaging_description" style="width: 100%;"><?php echo esc_textarea( $description ); ?></textarea><br><br>
 
         <label for="packaging_stock_qt">Quantidade em Estoque:</label>
-        <input type="number" id="packaging_stock_qt" name="packaging_stock_qt" min="0" value="<?php echo esc_attr( $stock_qt ); ?>" style="width: 100%;">
+        <input type="number" required id="packaging_stock_qt" name="packaging_stock_qt" min="0" value="<?php echo esc_attr( $stock_qt ); ?>" style="width: 100%;">
 
         <?php
         wp_nonce_field( 'packaging_meta_nonce_action', 'packaging_meta_nonce' );
@@ -25,7 +25,7 @@ class PackagingView {
     public static function render_packaging_columns($column, $meta_data) {
         switch ($column) {
             case 'packaging_name':
-                echo esc_html($meta_data['packaging_name'] ?: '(Sem nome)');
+                echo '<a href="' . $meta_data['packaging_edit_link'] . '">' . esc_html($meta_data['packaging_name']) . '</a>' ?: '(Sem nome)';
                 break;
 
             case 'packaging_description':
@@ -36,5 +36,22 @@ class PackagingView {
                 echo esc_html($meta_data['packaging_stock_qt'] ?: '0');
                 break;
         }
+    }
+
+    public static function render_packaging_dropdown($packagings) {
+        ?>
+        <div class="options_group">
+        <?php
+            woocommerce_wp_select([
+                'id' => '_packaging_id',
+                'label' => 'Embalagem',
+                'options' => array_reduce($packagings, function ($options, $packaging) {
+                    $options[$packaging->ID] = get_post_meta($packaging->ID, '_packaging_name', true);
+                    return $options;
+                }, ['' => 'Selecione uma embalagem']),
+            ]);
+        ?>
+        </div>
+        <?php
     }
 }
