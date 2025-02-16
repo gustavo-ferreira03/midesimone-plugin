@@ -1,9 +1,9 @@
 <?php
 
-namespace JewelryPlugin\Controllers;
+namespace MidesimonePlugin\Controllers;
 
-use JewelryPlugin\Models\PackagingModel;
-use JewelryPlugin\Views\PackagingView;
+use MidesimonePlugin\Models\PackagingModel;
+use MidesimonePlugin\Views\PackagingView;
 
 class PackagingController {
     public static function init() {

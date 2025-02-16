@@ -1,13 +1,12 @@
 <?php
 
 /**
- * Plugin Name: Plugin Loja de Semijoias
- * Plugin URI: https://example.com
- * Description: Plugin para <LOJA>
+ * Plugin Name: Midesimone Plugin
+ * Description: Exclusive plugin for Midesimone
  * Version: 1.0.0
  * Author: Gustavo Ferreira
  * License: GPLv2 or later
- * Text Domain: jewelry-plugin
+ * Text Domain: midesimone-plugin
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -16,6 +15,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once __DIR__ . '/includes/Init.php';
 
-use JewelryPlugin\Init;
+use MidesimonePlugin\Init;
 
 Init::run();

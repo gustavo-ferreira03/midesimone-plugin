@@ -1,6 +1,6 @@
 <?php
 
-namespace JewelryPlugin\Models;
+namespace MidesimonePlugin\Models;
 
 class PreferenceModel {
     public static function register_post_type() {
@@ -32,6 +32,51 @@ class PreferenceModel {
 
         register_post_type('preference', $args);
     }
+    
+    public static function register_preferences_taxonomy() {
+        $labels = [
+            'name'              => 'Preferências para Assinaturas',
+            'singular_name'     => 'Preferência de Joia',
+            'search_items'      => 'Buscar Preferências',
+            'all_items'         => 'Todas as Preferências',
+            'edit_item'         => 'Editar Preferência',
+            'update_item'       => 'Atualizar Preferência',
+            'add_new_item'      => 'Adicionar Nova Preferência',
+            'new_item_name'     => 'Nova Preferência',
+            'menu_name'         => 'Preferências para Assinaturas',
+        ];
+    
+        $args = [
+            'hierarchical'      => true,
+            'labels'            => $labels,
+            'show_ui'           => true,
+            'show_admin_column' => true,
+            'query_var'         => true,
+            'rewrite'           => ['slug' => 'jewelry-preference'],
+        ];
+    
+        register_taxonomy('jewelry_preference', ['product'], $args);
+    }
+
+    public static function enforce_child_selection($post_id) {
+        if (get_post_type($post_id) !== 'product') {
+            return;
+        }
+    
+        $terms = wp_get_post_terms($post_id, 'jewelry_preference');
+    
+        if (!empty($terms)) {
+            $parent_terms = [];
+            foreach ($terms as $term) {
+                if ($term->parent > 0) {
+                    $parent_terms[] = $term->parent;
+                }
+            }
+            if (!empty($parent_terms)) {
+                wp_set_object_terms($post_id, array_unique($parent_terms), 'jewelry_preference', true);
+            }
+        }
+    }
 
     public static function save_meta_data($post_id, $data) {
         if (isset($data['preference_description'])) {
@@ -41,14 +86,60 @@ class PreferenceModel {
         if (isset($data['preference_options']) && is_array($data['preference_options'])) {
             $sanitized_options = array_map(function ($option) {
                 return [
+                    'id'    => uniqid(),
                     'name'  => sanitize_text_field($option['name'] ?? ''),
                     'value' => isset($option['value']) ? floatval($option['value']) : 0,
                 ];
             }, $data['preference_options']);
 
             update_post_meta($post_id, '_preference_options', $sanitized_options);
+
+            self::create_preference_taxonomy($post_id, $data['preference_options']);
         }
     }
+
+    public static function create_preference_taxonomy($post_id, $options) {
+        self::delete_preference_taxonomy($post_id);
+        
+        $preference_name = get_the_title($post_id);
+        $parent_term = wp_insert_term($preference_name, 'jewelry_preference');
+        $parent_term_id = $parent_term['term_id'] ?? 0;
+        if ($parent_term_id) {
+            update_term_meta($parent_term_id, '_preference_id', $post_id);
+            if (is_array($options)) {
+                foreach ($options as $option) {
+                    if (!empty($option['name'])) {
+                        $subterm = wp_insert_term($option['name'], 'jewelry_preference', ['parent' => $parent_term_id]);
+                        if (!is_wp_error($subterm) && isset($subterm['term_id'])) {
+                            update_term_meta($subterm['term_id'], '_preference_id', $post_id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // TODO: ON DELETE PREFERENCE, DELETE TAXONOMY
+    
+    public static function delete_preference_taxonomy($post_id) {
+        $terms = get_terms([
+            'taxonomy'   => 'jewelry_preference',
+            'meta_query' => [
+                [
+                    'key'   => '_preference_id',
+                    'value' => $post_id,
+                ]
+            ],
+            'hide_empty' => false,
+        ]);
+    
+        if (!empty($terms) && !is_wp_error($terms)) {
+            foreach ($terms as $term) {
+                wp_delete_term($term->term_id, 'jewelry_preference');
+            }
+        }
+    }
+    
 
     public static function get_meta_data($post_id) {
         return [

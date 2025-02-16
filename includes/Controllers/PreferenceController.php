@@ -1,14 +1,17 @@
 <?php
 
-namespace JewelryPlugin\Controllers;
+namespace MidesimonePlugin\Controllers;
 
-use JewelryPlugin\Models\PreferenceModel;
-use JewelryPlugin\Views\PreferenceView;
+use MidesimonePlugin\Models\PreferenceModel;
+use MidesimonePlugin\Views\PreferenceView;
 
 class PreferencesController {
     public static function init() {
         add_action('init', [PreferenceModel::class, 'register_post_type']);
+        add_action('init', [PreferenceModel::class, 'register_preferences_taxonomy']);
         add_filter('manage_edit-preference_columns', [PreferenceModel::class, 'add_preference_columns']);
+        add_action('save_post', [PreferenceModel::class, 'enforce_child_selection']);
+
         add_action('manage_preference_posts_custom_column', [__CLASS__, 'render_preferences_columns'], 10, 2);
         add_action('save_post_preference', [__CLASS__, 'save_meta_data']);
         add_action('add_meta_boxes', [__CLASS__, 'register_meta_boxes']);

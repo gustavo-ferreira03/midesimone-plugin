@@ -1,6 +1,6 @@
 <?php
 
-namespace JewelryPlugin\Models;
+namespace MidesimonePlugin\Models;
 
 class PackagingModel {
     public static function register_post_type() {
@@ -85,7 +85,7 @@ class PackagingModel {
     public static function reduce_stock($packaging_id, $quantity) {
         $packaging_stock = PackagingModel::get_stock($packaging_id);
     
-        if ($current_stock >= $quantity) {
+        if ($packaging_stock >= $quantity) {
             update_post_meta($packaging_id, '_packaging_stock_qt', $packaging_stock - $quantity);
         } else {
             error_log("Estoque insuficiente para a embalagem ID: $packaging_id");

@@ -1,6 +1,6 @@
 <?php
 
-namespace JewelryPlugin\Views;
+namespace MidesimonePlugin\Views;
 
 class PreferenceView {
     public static function render_meta_box($post) {

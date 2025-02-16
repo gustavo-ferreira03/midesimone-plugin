@@ -1,6 +1,6 @@
 <?php
 
-namespace JewelryPlugin\Views;
+namespace MidesimonePlugin\Views;
 
 class PackagingView {
     public static function render_meta_box( $post ) {
@@ -40,17 +40,19 @@ class PackagingView {
 
     public static function render_packaging_dropdown($packagings) {
         ?>
-        <div class="options_group">
-        <?php
-            woocommerce_wp_select([
-                'id' => '_packaging_id',
-                'label' => 'Embalagem',
-                'options' => array_reduce($packagings, function ($options, $packaging) {
-                    $options[$packaging->ID] = get_post_meta($packaging->ID, '_packaging_name', true);
-                    return $options;
-                }, ['' => 'Selecione uma embalagem']),
-            ]);
-        ?>
+        <div class="show_if_simple show_if_variable">
+            <div class="options_group">
+            <?php
+                woocommerce_wp_select([
+                    'id' => '_packaging_id',
+                    'label' => 'Embalagem',
+                    'options' => array_reduce($packagings, function ($options, $packaging) {
+                        $options[$packaging->ID] = get_post_meta($packaging->ID, '_packaging_name', true);
+                        return $options;
+                    }, ['' => 'Selecione uma embalagem']),
+                ]);
+            ?>
+            </div>
         </div>
         <?php
     }

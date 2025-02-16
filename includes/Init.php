@@ -1,6 +1,6 @@
 <?php
 
-namespace JewelryPlugin;
+namespace MidesimonePlugin;
 
 class Init {
     public static function run() {
@@ -22,7 +22,7 @@ class Init {
 
     private static function initialize_controllers() {
         foreach (get_declared_classes() as $class) {
-            if (strpos($class, 'JewelryPlugin\\Controllers\\') === 0 && method_exists($class, 'init')) {
+            if (strpos($class, 'MidesimonePlugin\\Controllers\\') === 0 && method_exists($class, 'init')) {
                 $class::init();
             }
         }
