@@ -47,7 +47,7 @@ class SubscriptionView {
                                 <input 
                                     type="radio" 
                                     name="subscription_preferences[<?php echo esc_attr($preference->ID); ?>]" 
-                                    value="<?php echo esc_attr($option['id']); ?>" 
+                                    value="<?php echo esc_attr($option['slug']); ?>" 
                                     id="<?php echo esc_attr($radio_id); ?>"
                                 >
                                 <label for="<?php echo esc_attr($radio_id); ?>">
@@ -78,7 +78,7 @@ class SubscriptionView {
                 $option_name = '';
                 if (!empty($options) && is_array($options)):
                     foreach ($options as $option):
-                        if (isset($option['id']) && $option['id'] === $selected_option_id):
+                        if (isset($option['slug']) && $option['slug'] === $selected_option_id):
                             $option_name = $option['name'];
                             break;
                         endif;

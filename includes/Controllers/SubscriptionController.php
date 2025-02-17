@@ -18,6 +18,11 @@ class SubscriptionController {
         add_action('woocommerce_before_calculate_totals', [SubscriptionModel::class, 'apply_selected_preferences'], 10, 1);
         add_action('woocommerce_after_cart_item_name', [__CLASS__, 'display_subscription_preferences_in_cart'], 10, 2);
         add_filter('woocommerce_get_item_data', [SubscriptionModel::class, 'add_subscription_preferences_to_checkout'], 10, 2);
+
+        if ( ! wp_next_scheduled( 'midesimone_subscription_cron_hook' ) ) {
+            wp_schedule_event( time(), 'hourly', 'midesimone_subscription_cron_hook' );
+        }
+        add_action('midesimone_subscription_cron_hook', [SubscriptionModel::class, 'process_subscription_orders']);
     }
 
     public static function add_preferences_field_admin() {

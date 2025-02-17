@@ -82,34 +82,45 @@ class PreferenceModel {
         if (isset($data['preference_description'])) {
             update_post_meta($post_id, '_preference_description', sanitize_textarea_field($data['preference_description']));
         }
-
+    
         if (isset($data['preference_options']) && is_array($data['preference_options'])) {
             $sanitized_options = array_map(function ($option) {
                 return [
-                    'id'    => uniqid(),
-                    'name'  => sanitize_text_field($option['name'] ?? ''),
+                    'name'  => sanitize_text_field($option['name']),
+                    'slug'  => sanitize_title($option['name']),
                     'value' => isset($option['value']) ? floatval($option['value']) : 0,
                 ];
             }, $data['preference_options']);
-
+    
             update_post_meta($post_id, '_preference_options', $sanitized_options);
-
-            self::create_preference_taxonomy($post_id, $data['preference_options']);
+            self::create_preference_taxonomy($post_id, $sanitized_options);
         }
     }
-
+    
     public static function create_preference_taxonomy($post_id, $options) {
         self::delete_preference_taxonomy($post_id);
         
         $preference_name = get_the_title($post_id);
         $parent_term = wp_insert_term($preference_name, 'jewelry_preference');
         $parent_term_id = $parent_term['term_id'] ?? 0;
+        
         if ($parent_term_id) {
             update_term_meta($parent_term_id, '_preference_id', $post_id);
+            
             if (is_array($options)) {
                 foreach ($options as $option) {
                     if (!empty($option['name'])) {
-                        $subterm = wp_insert_term($option['name'], 'jewelry_preference', ['parent' => $parent_term_id]);
+                        $option_slug = sanitize_title($option['name']);
+                        
+                        $subterm = wp_insert_term(
+                            $option['name'],
+                            'jewelry_preference',
+                            [
+                                'parent' => $parent_term_id,
+                                'slug'   => $option_slug,
+                            ]
+                        );
+                        
                         if (!is_wp_error($subterm) && isset($subterm['term_id'])) {
                             update_term_meta($subterm['term_id'], '_preference_id', $post_id);
                         }
@@ -120,7 +131,6 @@ class PreferenceModel {
     }
 
     // TODO: ON DELETE PREFERENCE, DELETE TAXONOMY
-    
     public static function delete_preference_taxonomy($post_id) {
         $terms = get_terms([
             'taxonomy'   => 'jewelry_preference',
