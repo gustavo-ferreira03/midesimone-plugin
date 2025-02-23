@@ -83,4 +83,33 @@ class PreferenceView {
                 break;
         }
     }
+
+    public static function render_variation_preferences($preferences, $selected, $variation) {
+        ?>
+        <div class="variation-preferences" style="margin: 20px 0; border-top: 1px solid #ddd; padding-top: 20px;">
+            <h4>Preferências da Variação</h4>
+            <?php foreach ($preferences as $pref) : ?>
+                <fieldset style="margin: 10px 0; padding: 10px; border: 1px solid #eee;">
+                    <legend style="font-weight: bold;"><?= esc_html($pref->name) ?></legend>
+                    <?php 
+                    $child_terms = get_terms([
+                        'taxonomy' => 'jewelry_preference',
+                        'child_of' => $pref->term_id,
+                        'hide_empty' => false
+                    ]);
+                    
+                    foreach ($child_terms as $term) : ?>
+                        <label style="display: block; margin: 5px 0;">
+                            <input type="checkbox" 
+                                   name="variation_preferences[<?= esc_attr($variation->ID) ?>][]" 
+                                   value="<?= esc_attr($term->slug) ?>"
+                                   <?= in_array($term->slug, $selected) ? 'checked' : '' ?>>
+                            <?= esc_html($term->name) ?>
+                        </label>
+                    <?php endforeach; ?>
+                </fieldset>
+            <?php endforeach; ?>
+        </div>
+        <?php
+    }
 }

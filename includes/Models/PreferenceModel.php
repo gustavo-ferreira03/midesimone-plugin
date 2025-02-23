@@ -176,4 +176,21 @@ class PreferenceModel {
         $query = new \WP_Query($args);
         return $query->posts;
     }
+
+    public static function get_all_preference_terms() {
+        return get_terms([
+            'taxonomy' => 'jewelry_preference',
+            'hide_empty' => false,
+            'parent' => 0,
+        ]);
+    }
+
+    public static function save_variation_preferences($variation_id, $i) {
+        if (isset($_POST['variation_preferences'][$variation_id])) {
+            $slugs = array_map('sanitize_text_field', $_POST['variation_preferences'][$variation_id]);
+            update_post_meta($variation_id, '_variation_preferences', $slugs);
+        } else {
+            delete_post_meta($variation_id, '_variation_preferences');
+        }
+    }
 }
