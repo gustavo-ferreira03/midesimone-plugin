@@ -30,13 +30,20 @@ class AuctionController {
     
     public static function handle_create_auction() {
         if (!current_user_can('manage_options')) {
-            wp_die(__('Unauthorized user', 'text-domain'));
+            wp_die(__('Usuário não autorizado', 'text-domain'));
         }
         
         if (isset($_POST['auction_product_id'])) {
-            $product_id = intval($_POST['auction_product_id']);
+            $selected_id = intval(sanitize_text_field($_POST['auction_product_id']));
+            $new_auction_id = AuctionModel::create_auction_product($selected_id);
             
-            $new_auction_id = AuctionModel::create_auction_product($product_id);
+            if (is_wp_error($new_auction_id)) {
+                $error_message = $new_auction_id->get_error_message();
+                $redirect_url = admin_url('admin.php?page=auction-panel&auction_status=error&error_message=' . urlencode($error_message));
+                wp_redirect($redirect_url);
+                exit;
+            }
+            
             if ($new_auction_id) {
                 $redirect_url = admin_url("post.php?post={$new_auction_id}&action=edit");
                 wp_redirect($redirect_url);
