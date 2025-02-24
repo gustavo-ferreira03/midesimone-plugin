@@ -18,8 +18,9 @@ class PreferencesController {
 
         add_action('woocommerce_product_after_variable_attributes', [__CLASS__, 'add_preferences_to_variations'], 10, 3);
         add_action('woocommerce_save_product_variation', [PreferenceModel::class, 'save_variation_preferences'], 10, 2);
+        add_action('before_delete_post', [__CLASS__, 'on_delete_preference']);
     }
-
+  
     public static function render_preferences_columns($column, $post_id) {
         $meta_data = PreferenceModel::get_meta_data($post_id);
         PreferenceView::render_preference_columns($column, $meta_data);
@@ -52,12 +53,17 @@ class PreferencesController {
 
         PreferenceModel::save_meta_data($post_id, $_POST);
     }
-
     
     public static function add_preferences_to_variations($loop, $variation_data, $variation) {
         $preferences = PreferenceModel::get_all_preference_terms();
         $selected = get_post_meta($variation->ID, '_variation_preferences', true) ?: [];
         
         PreferenceView::render_variation_preferences($preferences, $selected, $variation);
+    }
+
+    public static function on_delete_preference($post_id) {
+        if (get_post_type($post_id) === 'preference') {
+            PreferenceModel::delete_preference_taxonomy($post_id);
+        }
     }
 }
