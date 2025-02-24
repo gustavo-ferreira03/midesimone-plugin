@@ -44,7 +44,8 @@ class SubscriptionView {
                             $radio_id = 'preference-' . $preference->ID . '-' . sanitize_title($option['name']);
                         ?>
                             <div class="preference-option">
-                                <input 
+                                <input
+                                    required
                                     type="radio" 
                                     name="subscription_preferences[<?php echo esc_attr($preference->ID); ?>]" 
                                     value="<?php echo esc_attr($option['slug']); ?>" 

@@ -11,6 +11,7 @@ class SubscriptionController {
         add_action('woocommerce_product_options_general_product_data', [__CLASS__, 'add_preferences_field_admin']);
         add_action('woocommerce_process_product_meta', [SubscriptionModel::class, 'save_preferences_field']);
         
+        add_filter('woocommerce_add_to_cart_validation', [SubscriptionModel::class, 'validate_subscription_preferences'], 10, 6);
         add_filter('woocommerce_add_cart_item_data', [SubscriptionModel::class, 'add_subscription_preferences_to_cart_item'], 10, 2);
         add_action('woocommerce_checkout_create_order_line_item', [SubscriptionModel::class, 'add_subscription_preferences_to_order_item'], 10, 4);
         
@@ -19,8 +20,8 @@ class SubscriptionController {
         add_action('woocommerce_after_cart_item_name', [__CLASS__, 'display_subscription_preferences_in_cart'], 10, 2);
         add_filter('woocommerce_get_item_data', [SubscriptionModel::class, 'add_subscription_preferences_to_checkout'], 10, 2);
 
-        if ( ! wp_next_scheduled( 'midesimone_subscription_cron_hook' ) ) {
-            wp_schedule_event( time(), 'hourly', 'midesimone_subscription_cron_hook' );
+        if (!wp_next_scheduled('midesimone_subscription_cron_hook')) {
+            wp_schedule_event(time(), 'daily', 'midesimone_subscription_cron_hook');
         }
         add_action('midesimone_subscription_cron_hook', [SubscriptionModel::class, 'process_subscription_orders']);
     }
