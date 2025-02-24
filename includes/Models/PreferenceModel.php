@@ -93,7 +93,10 @@ class PreferenceModel {
             }, $data['preference_options']);
     
             update_post_meta($post_id, '_preference_options', $sanitized_options);
-            self::create_preference_taxonomy($post_id, $sanitized_options);
+
+            if (!empty($sanitized_options)) {
+                self::create_preference_taxonomy($post_id, $sanitized_options);
+            }
         }
     }
     
@@ -148,7 +151,6 @@ class PreferenceModel {
             }
         }
     }
-    
 
     public static function get_meta_data($post_id) {
         return [
