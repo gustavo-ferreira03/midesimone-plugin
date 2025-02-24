@@ -1,0 +1,20 @@
+{
+    "require-dev": {
+      "wp-phpunit/wp-phpunit": "^6.7",
+      "yoast/phpunit-polyfills": "^1.0",
+      "phpunit/phpunit": "^8.0"
+    },
+    "scripts": {
+      "test": "phpunit"
+    },
+    "autoload": {
+      "psr-4": {
+        "JewelryPlugin\\": "includes/"
+      }
+    },
+    "config": {
+        "allow-plugins": {
+            "composer/installers": true
+        }
+    }
+}

@@ -102,81 +102,45 @@ class PackagingModel {
     }
     
     public static function reduce_stock($packaging_id, $quantity) {
-        global $wpdb;
-        
-        $max_retries = 5;
-        for ($i = 0; $i < $max_retries; $i++) {
-            $current_stock = self::get_stock($packaging_id);
-            
-            if ($current_stock < $quantity) {
-                error_log(__('Estoque insuficiente para embalagem ID:', 'text-domain') . $packaging_id);
-                return false;
-            }
-            
-            $updated = $wpdb->update(
-                $wpdb->postmeta,
-                ['meta_value' => $current_stock - $quantity],
-                [
-                    'post_id' => $packaging_id,
-                    'meta_key' => '_packaging_stock_qt',
-                    'meta_value' => $current_stock
-                ],
-                ['%d'],
-                ['%d', '%s', '%d']
-            );
-            
-            if ($updated !== false) {
-                wp_cache_delete($packaging_id, 'post_meta');
-                self::update_linked_products_stock_status($packaging_id);
-                return true;
-            }
-            
-            usleep(100000);
+        $current_stock = self::get_stock($packaging_id);
+        if ($current_stock < $quantity) {
+            error_log(__('Estoque insuficiente para embalagem ID:', 'text-domain') . $packaging_id);
+            return false;
         }
-        
-        error_log(__('Falha ao atualizar estoque após múltiplas tentativas para embalagem ID:', 'text-domain') . $packaging_id);
-        return false;
+        return self::update_stock_value($packaging_id, $current_stock, $current_stock - $quantity);
     }
-
+    
     public static function increase_stock($packaging_id, $quantity) {
-        global $wpdb;
-        
         $quantity = absint($quantity);
         if ($quantity === 0) {
             return false;
         }
-
-        $max_retries = 3;
-        for ($i = 0; $i < $max_retries; $i++) {
-            $current_stock = self::get_stock($packaging_id);
-            $new_stock = $current_stock + $quantity;
-
-            $updated = $wpdb->update(
-                $wpdb->postmeta,
-                ['meta_value' => $new_stock],
-                [
-                    'post_id' => $packaging_id,
-                    'meta_key' => '_packaging_stock_qt',
-                    'meta_value' => $current_stock
-                ],
-                ['%d'],
-                ['%d', '%s', '%d']
-            );
-
-            if ($updated !== false) {
-                wp_cache_delete($packaging_id, 'post_meta');
-                self::update_linked_products_stock_status($packaging_id);
-                return true;
-            }
-            
-            usleep(100000);
+        
+        $current_stock = self::get_stock($packaging_id);
+        return self::update_stock_value($packaging_id, $current_stock, $current_stock + $quantity);
+    }
+    
+    private static function update_stock_value($packaging_id, $old_stock, $new_stock) {
+        global $wpdb;
+        
+        $updated = $wpdb->update(
+            $wpdb->postmeta,
+            ['meta_value' => $new_stock],
+            [
+                'post_id'   => $packaging_id,
+                'meta_key'  => '_packaging_stock_qt',
+                'meta_value'=> $old_stock
+            ],
+            ['%d'],
+            ['%d', '%s', '%d']
+        );
+        
+        if ($updated !== false) {
+            wp_cache_delete($packaging_id, 'post_meta');
+            self::update_linked_products_stock_status($packaging_id);
+            return true;
         }
-
-        error_log(sprintf(
-            __('Falha ao aumentar estoque após %d tentativas para embalagem ID: %d', 'text-domain'),
-            $max_retries,
-            $packaging_id
-        ));
+        
         return false;
     }
 
