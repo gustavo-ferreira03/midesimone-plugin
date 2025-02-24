@@ -130,7 +130,6 @@ class PreferenceModel {
         }
     }
 
-    // TODO: ON DELETE PREFERENCE, DELETE TAXONOMY
     public static function delete_preference_taxonomy($post_id) {
         $terms = get_terms([
             'taxonomy'   => 'jewelry_preference',

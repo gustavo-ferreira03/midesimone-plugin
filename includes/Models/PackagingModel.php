@@ -33,23 +33,42 @@ class PackagingModel {
 
     public static function save_meta_data($post_id, $data) {
         $fields = [
-            'packaging_name'        => '_packaging_name',
-            'packaging_description' => '_packaging_description',
-            'packaging_stock_qt'    => '_packaging_stock_qt',
-            'packaging_width'       => '_packaging_width',
-            'packaging_height'      => '_packaging_height',
-            'packaging_length'      => '_packaging_length',
+            'packaging_name' => [
+                'meta_key' => '_packaging_name',
+                'sanitize' => 'sanitize_text_field',
+                'required' => true
+            ],
+            'packaging_description' => [
+                'meta_key' => '_packaging_description',
+                'sanitize' => 'wp_kses_post'
+            ],
+            'packaging_stock_qt' => [
+                'meta_key' => '_packaging_stock_qt',
+                'sanitize' => 'intval',
+                'validate' => function($value) {
+                    return $value >= 0;
+                }
+            ]
         ];
 
-        foreach ($fields as $field => $meta_key) {
-            if (isset($data[$field])) {
-                update_post_meta($post_id, $meta_key, sanitize_text_field($data[$field]));
+        foreach ($fields as $field => $config) {
+            if (!isset($data[$field])) continue;
+            
+            $value = call_user_func($config['sanitize'], $data[$field]);
+            
+            if (isset($config['validate']) && !call_user_func($config['validate'], $value)) {
+                continue;
             }
+            
+            update_post_meta($post_id, $config['meta_key'], $value);
         }
+
+        self::update_linked_products_stock_status($post_id);
     }
 
     public static function get_meta_data($post_id) {
         return [
+            'post_id'               => $post_id,
             'packaging_name'        => get_post_meta($post_id, '_packaging_name', true),
             'packaging_description' => get_post_meta($post_id, '_packaging_description', true),
             'packaging_stock_qt'    => get_post_meta($post_id, '_packaging_stock_qt', true),
@@ -60,13 +79,13 @@ class PackagingModel {
     public static function add_packaging_columns($columns) {
         unset($columns['date']);
         unset($columns['title']);
-
-        $columns['packaging_name'] = 'Nome';
-        $columns['packaging_description'] = 'Descrição';
-        $columns['packaging_stock_qt'] = 'Quantidade em Estoque';
-
+    
+        $columns['packaging_name']      = 'Nome';
+        $columns['linked_products']     = 'Produtos Vinculados';
+        $columns['packaging_stock_qt']  = 'Quantidade em Estoque';
+    
         return $columns;
-    }
+    }    
 
     public static function get_all_packagings() {
         $args = [
@@ -83,24 +102,148 @@ class PackagingModel {
     }
     
     public static function reduce_stock($packaging_id, $quantity) {
-        $packaging_stock = PackagingModel::get_stock($packaging_id);
+        global $wpdb;
+        
+        $max_retries = 5;
+        for ($i = 0; $i < $max_retries; $i++) {
+            $current_stock = self::get_stock($packaging_id);
+            
+            if ($current_stock < $quantity) {
+                error_log(__('Estoque insuficiente para embalagem ID:', 'text-domain') . $packaging_id);
+                return false;
+            }
+            
+            $updated = $wpdb->update(
+                $wpdb->postmeta,
+                ['meta_value' => $current_stock - $quantity],
+                [
+                    'post_id' => $packaging_id,
+                    'meta_key' => '_packaging_stock_qt',
+                    'meta_value' => $current_stock
+                ],
+                ['%d'],
+                ['%d', '%s', '%d']
+            );
+            
+            if ($updated !== false) {
+                wp_cache_delete($packaging_id, 'post_meta');
+                self::update_linked_products_stock_status($packaging_id);
+                return true;
+            }
+            
+            usleep(100000);
+        }
+        
+        error_log(__('Falha ao atualizar estoque após múltiplas tentativas para embalagem ID:', 'text-domain') . $packaging_id);
+        return false;
+    }
+
+    public static function increase_stock($packaging_id, $quantity) {
+        global $wpdb;
+        
+        $quantity = absint($quantity);
+        if ($quantity === 0) {
+            return false;
+        }
+
+        $max_retries = 3;
+        for ($i = 0; $i < $max_retries; $i++) {
+            $current_stock = self::get_stock($packaging_id);
+            $new_stock = $current_stock + $quantity;
+
+            $updated = $wpdb->update(
+                $wpdb->postmeta,
+                ['meta_value' => $new_stock],
+                [
+                    'post_id' => $packaging_id,
+                    'meta_key' => '_packaging_stock_qt',
+                    'meta_value' => $current_stock
+                ],
+                ['%d'],
+                ['%d', '%s', '%d']
+            );
+
+            if ($updated !== false) {
+                wp_cache_delete($packaging_id, 'post_meta');
+                self::update_linked_products_stock_status($packaging_id);
+                return true;
+            }
+            
+            usleep(100000);
+        }
+
+        error_log(sprintf(
+            __('Falha ao aumentar estoque após %d tentativas para embalagem ID: %d', 'text-domain'),
+            $max_retries,
+            $packaging_id
+        ));
+        return false;
+    }
+
+    public static function handle_order_status_change($order_id, $old_status, $new_status, $order) {
+        $restore_statuses = ['cancelled', 'refunded', 'failed'];
+        if (in_array($new_status, $restore_statuses)) {
+            self::restore_stock_from_order($order);
+        }
+
+        foreach ($order->get_items() as $item) {
+            $product = $item->get_product();
+            if (!$product) continue;
     
-        if ($packaging_stock >= $quantity) {
-            update_post_meta($packaging_id, '_packaging_stock_qt', $packaging_stock - $quantity);
-        } else {
-            error_log("Estoque insuficiente para a embalagem ID: $packaging_id");
+            $packaging_id = get_post_meta($product->get_id(), '_packaging_id', true);
+            if ($packaging_id) {
+                self::update_linked_products_stock_status($packaging_id);
+            }
+        }
+    }
+
+    public static function restore_stock_from_order($order) {
+        foreach ($order->get_items() as $item) {
+            $product = $item->get_product();
+            if (!$product) continue;
+
+            $packaging_id = get_post_meta($product->get_id(), '_packaging_id', true);
+            $quantity = $item->get_quantity();
+
+            if ($packaging_id) {
+                self::increase_stock($packaging_id, $quantity);
+            }
+        }
+    }
+
+    public static function handle_packaging_deletion($post_id) {
+        if ('packaging' !== get_post_type($post_id)) return;
+
+        $linked_products = get_posts([
+            'post_type' => 'product',
+            'meta_key' => '_packaging_id',
+            'meta_value' => $post_id,
+            'fields' => 'ids',
+            'posts_per_page' => -1
+        ]);
+
+        foreach ($linked_products as $product_id) {
+            delete_post_meta($product_id, '_packaging_id');
+            error_log(sprintf(
+                __('Embalagem ID %1$s removida do produto ID %2$s', 'text-domain'),
+                $post_id,
+                $product_id
+            ));
         }
     }
     
     public static function save_product_packaging_meta($post_id) {
         if (isset($_POST['_packaging_id'])) {
             update_post_meta($post_id, '_packaging_id', sanitize_text_field($_POST['_packaging_id']));
+            $packaging_id = sanitize_text_field($_POST['_packaging_id']);
+            self::update_linked_products_stock_status($packaging_id);
         }
     }
     
     public static function order_reduce_packaging_stock($order) {    
         foreach ($order->get_items() as $item) {
-            $product_id = $item->get_product()->get_id();
+            $product = $item->get_product();
+            $product_id = $product->is_type('variation') ? $product->get_parent_id() : $product->get_id();
             $packaging_id = get_post_meta($product_id, '_packaging_id', true);
     
             if ($packaging_id) {
@@ -110,28 +253,37 @@ class PackagingModel {
     }
 
     public static function validate_cart_item_stock() {
-        foreach (WC()->cart->get_cart() as $cart_item) {
-            $product = wc_get_product($cart_item['product_id']);
-            $product_id = $product->get_id();
+        foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) {
+            $product = $cart_item['data'];
+            $product_id = $product->is_type('variation') ? $product->get_parent_id() : $product->get_id();
             $packaging_id = get_post_meta($product_id, '_packaging_id', true);
             
-            if ($packaging_id) {
-                $packaging_stock = PackagingModel::get_stock($packaging_id);
-                $cart_quantity = $cart_item['quantity'];
-                if($packaging_stock < $cart_quantity) {
-                    wc_add_notice("Estoque insuficiente para o produto: " . $product->get_name(), 'error');
-                }
+            if (!$packaging_id) continue;
+            
+            $required_stock = $cart_item['quantity'];
+            $available_stock = self::get_stock($packaging_id);
+            
+            if ($available_stock < $required_stock) {
+                $message = sprintf(
+                    __('Não há estoque suficiente de embalagens para "%s". Disponível: %d', 'text-domain'),
+                    $product->get_name(),
+                    $available_stock
+                );
+                wc_add_notice($message, 'error');
+                WC()->cart->set_quantity($cart_item_key, 0);
             }
         }
     }
 
     public static function validate_packaging_in_stock($product_stock, $product) {
-        $product_id = $product->get_id();
+        $product_id = $product->is_type('variation') ? $product->get_parent_id() : $product->get_id();
         $packaging_id = get_post_meta($product_id, '_packaging_id', true);
         
         if ($packaging_id) {
             $packaging_stock = PackagingModel::get_stock($packaging_id);
             if ($packaging_stock <= 0) {
+                $product->set_stock_status('outofstock');
+                $product->save();
                 return false;
             }
         }
@@ -145,9 +297,10 @@ class PackagingModel {
         }
 
         foreach ($order->get_items() as $item) {
-            $product_id = $item->get_product()->get_id();
-            $quantity = $item->get_quantity();
+            $product = $item->get_product();
+            $product_id = $product->is_type('variation') ? $product->get_parent_id() : $product->get_id();
             $packaging_id = get_post_meta($product_id, '_packaging_id', true);
+            $quantity = $item->get_quantity();
 
             if ($packaging_id) {
                 $current_stock = PackagingModel::get_stock($packaging_id);
@@ -155,5 +308,49 @@ class PackagingModel {
                 update_post_meta($packaging_id, '_packaging_stock_qt', $new_stock);
             }
         }
+    }
+
+    public static function get_linked_products($packaging_id) {
+        return get_posts([
+            'post_type' => ['product', 'product_variation'],
+            'meta_key' => '_packaging_id',
+            'meta_value' => $packaging_id,
+            'fields' => 'ids',
+            'posts_per_page' => -1,
+            'post_status' => 'publish',
+            'meta_query' => [
+                [
+                    'key' => '_packaging_id',
+                    'value' => $packaging_id,
+                    'compare' => '='
+                ]
+            ]
+        ]);
+    }
+
+    public static function update_linked_products_stock_status($packaging_id) {
+        $linked_products = self::get_linked_products($packaging_id);
+        $packaging_stock = self::get_stock($packaging_id);
+    
+        foreach ($linked_products as $product_id) {
+            $product = wc_get_product($product_id);
+            if (!$product) continue;
+    
+            $new_status = $packaging_stock > 0 ? 'instock' : 'outofstock';
+            $product->set_stock_status($new_status);
+            $product->save();
+        }
+    }
+
+    public static function get_product_stock_status($status, $product) {
+        $product_id = $product->is_type('variation') ? $product->get_parent_id() : $product->get_id();
+        $packaging_id = get_post_meta($product_id, '_packaging_id', true);
+        
+        if ($packaging_id) {
+            $packaging_stock = self::get_stock($packaging_id);
+            return $packaging_stock > 0 ? 'instock' : 'outofstock';
+        }
+        
+        return $status;
     }
 }
