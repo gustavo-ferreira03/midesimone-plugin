@@ -16,7 +16,7 @@ class SubscriptionController {
         add_action('woocommerce_checkout_create_order_line_item', [SubscriptionModel::class, 'add_subscription_preferences_to_order_item'], 10, 4);
         
         add_action('woocommerce_after_add_to_cart_quantity', [__CLASS__, 'display_subscription_preferences']);
-        add_action('woocommerce_before_calculate_totals', [SubscriptionModel::class, 'apply_selected_preferences'], 10, 1);
+        add_action('woocommerce_before_calculate_totals', [__CLASS__, 'apply_selected_preferences'], 10, 1);
         add_action('woocommerce_after_cart_item_name', [__CLASS__, 'display_subscription_preferences_in_cart'], 10, 2);
         add_filter('woocommerce_get_item_data', [SubscriptionModel::class, 'add_subscription_preferences_to_checkout'], 10, 2);
 
@@ -24,6 +24,11 @@ class SubscriptionController {
             wp_schedule_event(time(), 'daily', 'midesimone_subscription_cron_hook');
         }
         add_action('midesimone_subscription_cron_hook', [SubscriptionModel::class, 'process_subscription_orders']);
+    }
+
+    public static function apply_selected_preferences($cart) {
+        if (is_admin() && !defined('DOING_AJAX')) return;
+        SubscriptionModel::apply_selected_preferences($cart);
     }
 
     public static function add_preferences_field_admin() {

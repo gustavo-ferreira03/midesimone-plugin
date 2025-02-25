@@ -4,11 +4,28 @@ namespace MidesimonePlugin\Models;
 
 use DateTime;
 use DateTimeZone;
+use Exception;
+use WC_Cart;
+use WC_Subscription;
 
 class SubscriptionModel {
+    protected static $current_date = null;
+
+    public static function set_current_date($date) {
+        self::$current_date = $date;
+    }
+
+    public static function get_current_date() {
+        return self::$current_date ?: 'now';
+    }
+    
     public static function save_preferences_field($post_id) {
         if (isset($_POST['subscription_preferences']) && is_array($_POST['subscription_preferences'])) {
-            update_post_meta($post_id, '_subscription_preferences', array_map('intval', $_POST['subscription_preferences']));
+            $sanitized = [];
+            foreach ($_POST['subscription_preferences'] as $pref_id => $slug) {
+                $sanitized[intval($pref_id)] = sanitize_text_field($slug);
+            }
+            update_post_meta($post_id, '_subscription_preferences', $sanitized);
         } else {
             delete_post_meta($post_id, '_subscription_preferences');
         }
@@ -126,9 +143,7 @@ class SubscriptionModel {
         }
     }
 
-    public static function apply_selected_preferences($cart) {
-        if (is_admin() && !defined('DOING_AJAX')) return;
-
+    public static function apply_selected_preferences(WC_Cart $cart) {
         foreach ($cart->get_cart() as $cart_item) {
             if (!empty($cart_item['subscription_preferences'])) {
                 $product = $cart_item['data'];
@@ -156,73 +171,72 @@ class SubscriptionModel {
 
     public static function process_subscription_orders() {
         $subscriptions = wcs_get_subscriptions(['subscription_status' => 'active']);
-        if (empty($subscriptions)) return;
-
+    
         foreach ($subscriptions as $subscription) {
             try {
-                $current_month = (new DateTime('now', new DateTimeZone(wp_timezone_string())))->format('Y-m');
-                $last_processed_month = $subscription->get_meta('_last_processed_month');
-
-                if ($last_processed_month === $current_month) {
-                    continue;
-                }
-
-                $created_date = $subscription->get_date('start');
-                $last_payment_date = $subscription->get_date_paid();
-                $site_timezone = new DateTimeZone(wp_timezone_string());
-
-                $created_datetime = new DateTime($created_date, new DateTimeZone('UTC'));
-                $created_datetime->setTimezone($site_timezone);
-                $created_month_sub = $created_datetime->format('Y-m');
-
-                $last_payment_month = null;
-                if ($last_payment_date) {
-                    $last_payment_datetime = new DateTime($last_payment_date, new DateTimeZone('UTC'));
-                    $last_payment_datetime->setTimezone($site_timezone);
-                    $last_payment_month = $last_payment_datetime->format('Y-m');
-                }
-
-                $should_process = ($created_month_sub === $current_month) || ($last_payment_month === $current_month);
-
-                if (!$should_process) {
-                    continue;
-                }
-
-                $selected_preferences = $subscription->get_meta('_selected_subscription_preferences');
-                if (empty($selected_preferences)) {
-                    $subscription->add_order_note('Nenhuma preferência selecionada para esta assinatura.');
-                    continue;
-                }
-
-                $candidate_products = self::get_candidate_products($selected_preferences);
-                if (empty($candidate_products)) {
-                    $subscription->add_order_note('Nenhum produto disponível corresponde às preferências selecionadas.');
-                    continue;
-                }
-
-                $selected_products = self::select_products_for_subscription($subscription, $candidate_products);
+                $current_month = (new DateTime(self::get_current_date(), new DateTimeZone(wp_timezone_string())))->format('Y-m');
                 
-                if (!empty($selected_products)) {
-                    self::create_subscription_order($subscription, $selected_products);
-                    $total_selected = array_sum(array_column($selected_products, 'price'));
-                    $remaining = $subscription->get_total() - $total_selected;
-                    
-                    if ($remaining > 0) {
-                        $subscription->add_order_note("Pedido criado automaticamente. Crédito não utilizado: " . wc_price($remaining));
-                    }
-                } else {
-                    $subscription->add_order_note('Nenhuma combinação válida encontrada sem exceder o valor da assinatura.');
+                if (!self::should_process_subscription($subscription, $current_month)) {
+                    continue;
                 }
+                
+                self::process_products_and_create_order($subscription);
 
                 $subscription->update_meta_data('_last_processed_month', $current_month);
                 $subscription->save();
-
-            } catch (\Exception $e) {
-                error_log('[Midesimone] Erro na assinatura ' . $subscription->get_id() . ': ' . $e->getMessage());
+            } catch (Exception $e) {
+                error_log("[Midesimone] Erro na assinatura {$subscription->get_id()}: {$e->getMessage()}");
                 $subscription->update_status('on-hold', 'Erro no processamento automático');
+                $subscription->save();
             }
         }
     }
+    
+    private static function should_process_subscription(WC_Subscription $subscription, string $current_month): bool {
+        if ($subscription->get_meta('_last_processed_month') === $current_month) {
+            return false;
+        }
+    
+        $get_month = function(string $date) {
+            $dt = new DateTime($date, new DateTimeZone('UTC'));
+            $dt->setTimezone(new DateTimeZone(wp_timezone_string()));
+            return $dt->format('Y-m');
+        };
+    
+        $created_month = $get_month($subscription->get_date('start'));
+        $last_renewal_date = $subscription->get_meta('_last_renewal_date');
+        $last_renewal_month = $last_renewal_date ? $get_month($last_renewal_date) : null;
+    
+        $should_process = $created_month === $current_month || $last_renewal_month === $current_month;
+        return $should_process;
+    }
+    
+    private static function process_products_and_create_order(WC_Subscription $subscription): void {
+        $preferences = $subscription->get_meta('_selected_subscription_preferences');
+        if (empty($preferences)) {
+            throw new Exception('Nenhuma preferência selecionada');
+        }
+    
+        $candidates = self::get_candidate_products($preferences);
+        if (empty($candidates)) {
+            throw new Exception('Nenhum produto disponível');
+        }
+    
+        $selected = self::select_products_for_subscription($subscription, $candidates);
+        if (empty($selected)) {
+            throw new Exception('Nenhuma combinação válida');
+        }
+    
+        self::create_subscription_order($subscription, $selected);
+        
+        $total = array_sum(array_column($selected, 'price'));
+        $remaining = $subscription->get_total() - $total;
+        
+        if ($remaining > 0) {
+            $subscription->add_order_note("Crédito não utilizado: " . wc_price($remaining));
+        }
+    }
+
     public static function get_candidate_products($selected_preferences) {
         $candidates = [];
         $candidates = array_merge($candidates, self::get_products_by_taxonomy($selected_preferences));
@@ -312,7 +326,7 @@ class SubscriptionModel {
         }, $filtered);
     }
 
-    private static function select_products_for_subscription($subscription, $candidates) {
+    public static function select_products_for_subscription($subscription, $candidates) {
         $target = $subscription->get_total();
         return self::findBestCombination($candidates, $target);
     }
@@ -335,8 +349,9 @@ class SubscriptionModel {
         $order->update_meta_data('_subscription_parent', $subscription->get_id());
         $order->calculate_totals();
         $order->save();
-        
         $order->update_status('processing', 'Pedido criado automaticamente via assinatura');
+
+        return $order;
     }
 
     private static function findBestCombination($products, $target) {
@@ -349,23 +364,23 @@ class SubscriptionModel {
             ];
         }, $products);
     
-        $dp = [0 => ['count' => 0, 'products' => []]];
+        $dp = [0 => ['sum' => 0, 'count' => 0, 'products' => []]];
     
         foreach ($products_cents as $product) {
-            $price = $product['price_cents'];
-            for ($s = $target_cents; $s >= $price; $s--) {
-                if (isset($dp[$s - $price])) {
-                    $new_count = $dp[$s - $price]['count'] + 1;
-                    $new_sum = $s;
+            for ($s = $target_cents; $s >= $product['price_cents']; $s--) {
+                if (isset($dp[$s - $product['price_cents']])) {
+                    $new_sum = $dp[$s - $product['price_cents']]['sum'] + $product['price_cents'];
+                    $new_count = $dp[$s - $product['price_cents']]['count'] + 1;
                     
-                    if (!isset($dp[$s]) || 
-                        $s > $dp[$s]['sum'] || 
-                        ($s == $dp[$s]['sum'] && $new_count > $dp[$s]['count'])) {
-                        
+                    if ($new_sum > ($dp[$s]['sum'] ?? 0) || 
+                       ($new_sum === ($dp[$s]['sum'] ?? 0) && $new_count > $dp[$s]['count'])) {
                         $dp[$s] = [
-                            'sum' => $s,
+                            'sum' => $new_sum,
                             'count' => $new_count,
-                            'products' => array_merge($dp[$s - $price]['products'], [$product])
+                            'products' => array_merge(
+                                $dp[$s - $product['price_cents']]['products'], 
+                                [$product]
+                            )
                         ];
                     }
                 }
@@ -374,11 +389,9 @@ class SubscriptionModel {
     
         $best = ['sum' => 0, 'count' => 0, 'products' => []];
         foreach ($dp as $entry) {
-            if ($entry['sum'] <= $target_cents) {
-                if ($entry['sum'] > $best['sum'] || 
-                   ($entry['sum'] == $best['sum'] && $entry['count'] > $best['count'])) {
-                    $best = $entry;
-                }
+            if ($entry['sum'] > $best['sum'] || 
+               ($entry['sum'] === $best['sum'] && $entry['count'] > $best['count'])) {
+                $best = $entry;
             }
         }
     

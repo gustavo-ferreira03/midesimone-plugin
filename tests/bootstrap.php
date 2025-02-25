@@ -29,8 +29,8 @@ require_once "{$_tests_dir}/includes/functions.php";
  * Manually load the plugin being tested.
  */
 function _manually_load_plugin() {
-	define('WC_ABSPATH', __DIR__ . '/../../woocommerce/');
-	require_once WC_ABSPATH . 'woocommerce.php';
+	require __DIR__ . '/../../woocommerce/woocommerce.php';
+	require __DIR__ . '/../../woocommerce-subscriptions/woocommerce-subscriptions.php';
 	require dirname( dirname( __FILE__ ) ) . '/midesimone-plugin.php';
 }
 
