@@ -16,11 +16,11 @@ class PackagingController {
         add_action('woocommerce_product_options_inventory_product_data', [__CLASS__, 'add_packaging_dropdown']);
         add_action('woocommerce_process_product_meta', [PackagingModel::class, 'save_product_packaging_meta']);
         
-        add_action('woocommerce_product_is_in_stock', [PackagingModel::class, 'validate_packaging_in_stock'], 50, 2);
         add_action('woocommerce_check_cart_items', [PackagingModel::class, 'validate_cart_item_stock']);
         add_action('woocommerce_reduce_order_stock', [PackagingModel::class, 'order_reduce_packaging_stock']);
-
+        
         add_action('woocommerce_order_status_changed', [PackagingModel::class, 'handle_order_status_change'], 10, 4);
+        add_action('woocommerce_product_is_in_stock', [PackagingModel::class, 'get_product_stock_status'], 10, 2);
         add_filter('woocommerce_product_get_stock_status', [PackagingModel::class, 'get_product_stock_status'], 10, 2);
     }
 

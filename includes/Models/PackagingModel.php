@@ -239,21 +239,6 @@ class PackagingModel {
         }
     }
 
-    public static function validate_packaging_in_stock($product_stock, $product) {
-        $product_id = $product->is_type('variation') ? $product->get_parent_id() : $product->get_id();
-        $packaging_id = get_post_meta($product_id, '_packaging_id', true);
-        
-        if ($packaging_id) {
-            $packaging_stock = PackagingModel::get_stock($packaging_id);
-            if ($packaging_stock <= 0) {
-                $product->set_stock_status('outofstock');
-                $product->save();
-                return false;
-            }
-        }
-        return true;
-    }
-
     public static function restore_packaging_stock($order_id, $items) {
         $order = wc_get_order($order_id);
         if (!$order) {
